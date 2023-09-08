@@ -46,7 +46,7 @@ func (cfg *apiConfig)handlerChirpsCreate(w http.ResponseWriter, r *http.Request)
 func validateChirp(body string) (string, error) {
 	const max = 140
 	if len(body) > max {
-		return "", errors.New("Chirp is too long!")
+		return "", errors.New("Chirp is too long")
 	}
 	badWords := map[string]struct{} {
 		"kerfuffle": {},

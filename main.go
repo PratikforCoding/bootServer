@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"github.com/go-chi/chi/v5"
 
-	"github.com/PratikforCoding/chirpy/internal/database"
+	"github.com/PratikforCoding/chirpy.git/internal/database"
 )
 
 type apiConfig struct {

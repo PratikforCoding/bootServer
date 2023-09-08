@@ -6,7 +6,7 @@ import (
 	"sort"
 )
 func (cfg *apiConfig)handlerChirpsRetrieve(w http.ResponseWriter, r *http.Request) {
-	dbChirps, err := cfg.DB.getChirps()
+	dbChirps, err := cfg.DB.GetChirps()
 	if err != nil {
 		responseWithError(w, http.StatusInternalServerError, "Could't retrieve chirps!")
 		return
