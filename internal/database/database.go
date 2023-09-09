@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"sync"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type DB struct {
@@ -13,10 +14,21 @@ type DB struct {
 }
 type DBStructure struct {
 	Chirps map[int]Chirp `json:"chirps"`
+} 
+
+type DBStructureUser struct {
+	Users map[string]User `json:"users"`
 }
+
+
 type Chirp struct {
 	ID int `json:"id"`
 	Body string `json:"body"`
+}
+type User struct {
+	Password string `json:"password"`
+	Email string `json:"email"`
+	ID int `json:"id"`
 }
 
 func NewDB(path string) (*DB,  error) {
@@ -31,7 +43,7 @@ func NewDB(path string) (*DB,  error) {
 func (db *DB)ensureDb() error {
 	_, err := os.ReadFile(db.path)
 	if errors.Is(err, os.ErrNotExist) {
-		return db.createDB()
+		return db.createDBUser()
 	}
 	return nil
 }
@@ -41,6 +53,12 @@ func (db *DB)createDB() error {
 		Chirps: map[int]Chirp{},
 	}
 	return db.writeDB(dbStructure)
+} 
+func (db *DB)createDBUser() error {
+	dbStructure := DBStructureUser{
+		Users: map[string]User{},
+	}
+	return db.writeDBUser(dbStructure)
 }
 
 func (db *DB) CreateChirp(body string) (Chirp, error) {
@@ -62,6 +80,53 @@ func (db *DB) CreateChirp(body string) (Chirp, error) {
 	return chirp, nil
 }
 
+func(db *DB)CreateUser(email, password string) (User, error) {
+	dbStructure, err := db.loadDBUser()
+	if err != nil {
+		return User{}, err
+	}
+	if _, ok := dbStructure.Users[email]; ok {
+		return User{}, errors.New("User already exist")
+	}
+	id := len(dbStructure.Users) + 1
+	bytePass := []byte(password)
+	costFactor := 12
+	hashedPassword, err := bcrypt.GenerateFromPassword(bytePass, costFactor)
+	if err != nil {
+		return User{}, err
+	}
+	user := User {
+		Password: string(hashedPassword),
+		Email: email,
+		ID: id,
+	}
+
+	dbStructure.Users[email] = user
+	err = db.writeDBUser(dbStructure)
+	if err != nil {
+		return User{}, err
+	}
+	return user, nil
+}
+
+func(db *DB)LoginUser(email, password string) (User, error) {
+	dbStructure, err := db.loadDBUser()
+	if err != nil {
+		return User{}, err
+	}
+	user, ok := dbStructure.Users[email]
+	if !ok {
+		return User{}, errors.New("Email didn't match")
+	}
+	getPassword := []byte(user.Password)
+	givenPassword := []byte(password)
+	err =  bcrypt.CompareHashAndPassword(getPassword, givenPassword)
+	if err != nil {
+		return User{}, err
+	}
+	return user, nil
+}
+
 func(db *DB)GetChirps() ([]Chirp, error) {
 	dbStructure, err := db.loadDB()
 	if err != nil {
@@ -73,6 +138,18 @@ func(db *DB)GetChirps() ([]Chirp, error) {
 		chirps = append(chirps, chirp)
 	}
 	return chirps, nil
+} 
+
+func(db *DB) GetChirpById(chirpId int) (Chirp, error) {
+	dbStructure, err := db.loadDB()
+	if err != nil {
+		return Chirp{}, err
+	}
+	chirp, ok := dbStructure.Chirps[chirpId]
+	if !ok {
+		return Chirp{}, errors.New("Chirp doesn't exist")
+	}
+	return chirp, nil
 } 
 
 func (db *DB)loadDB() (DBStructure, error) {
@@ -91,7 +168,38 @@ func (db *DB)loadDB() (DBStructure, error) {
 	return dbStructure, nil
 }
 
+func (db *DB)loadDBUser() (DBStructureUser, error) {
+	db.m.RLock()
+	defer db.m.RUnlock()
+
+	dbStructure := DBStructureUser{}
+	dat, err := os.ReadFile(db.path)
+	if errors.Is(err, os.ErrNotExist) {
+		return dbStructure, err
+	}
+	err = json.Unmarshal(dat, &dbStructure)
+	if err != nil {
+		return dbStructure, err
+	}
+	return dbStructure, nil
+}
+
 func (db *DB)writeDB(dbStructure DBStructure) error {
+	db.m.Lock()
+	defer db.m.Unlock()
+
+	dat, err := json.Marshal(dbStructure)
+	if err != nil {
+		return err
+	}
+
+	err = os.WriteFile(db.path, dat, 0600)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+func (db *DB)writeDBUser(dbStructure DBStructureUser) error {
 	db.m.Lock()
 	defer db.m.Unlock()
 
