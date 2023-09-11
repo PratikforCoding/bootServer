@@ -2,8 +2,10 @@ package main
 
 import (
 	"log"
+	"os"
 	"net/http"
 	"github.com/go-chi/chi/v5"
+	"github.com/joho/godotenv"
 
 	"github.com/PratikforCoding/chirpy.git/internal/database"
 )
@@ -11,9 +13,18 @@ import (
 type apiConfig struct {
 	fileserverHits int
 	DB *database.DB
+	jwt_secret string
 }
 
 func main() {
+
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
+
+	jwtSecret := os.Getenv("JWT_SECRET")
+
 	db, err := database.NewDB("database.json")
 	if err != nil {
 		log.Fatal(err)
@@ -22,6 +33,7 @@ func main() {
 	apicfg := apiConfig {
 		fileserverHits: 0,
 		DB: db,
+		jwt_secret: jwtSecret,
 	}
 
 	router := chi.NewRouter()
@@ -37,6 +49,7 @@ func main() {
 	apiRouter.Get("/chirps/{id}", apicfg.handlerGetChirpbyId)
 	apiRouter.Post("/users", apicfg.handlerUsersCreate)
 	apiRouter.Post("/login", apicfg.handlerLogin)
+	apiRouter.Put("/users", apicfg.handlerUsersUpdate)
 
 	router.Mount("/api", apiRouter)
 

@@ -3,12 +3,20 @@ package main
 import (
 	"encoding/json"
 	"net/http"
+	"time"
+	"github.com/PratikforCoding/chirpy.git/internal/auth"
 )
 
 func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, r *http.Request) {
 	type parameters struct {
 		Password string `json:"password"`
 		Email string `json:"email"`
+		ExpiresInSeconds int `json:"expires_in_seconds"`
+	}
+
+	type returnUser struct {
+		User
+		Token string `json:"token"`
 	}
 
 	decoder := json.NewDecoder(r.Body)
@@ -18,17 +26,36 @@ func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, r *http.Request) {
 		responseWithError(w, http.StatusInternalServerError, "Couldn't decode parameters")
 		return
 	}
-	user, err := cfg.DB.LoginUser(params.Email, params.Password)
+	user, err := cfg.DB.GetUserByEmail(params.Email)
 	if err != nil {
-		responseWithError(w, 401, "Login failed")
+		responseWithError(w, http.StatusInternalServerError, "Couldn't get user")
 		return
 	}
-	type returnUser struct {
-		ID int `json:"id"`
-		Email string `json:"email"`
+
+	err = auth.CheckPasswordHash(params.Password, user.HashedPassword)
+	if err != nil {
+		responseWithError(w, http.StatusUnauthorized, "Invalid password")
+		return
 	}
+
+	defaultExpiration := 24 * 60 * 60
+	if params.ExpiresInSeconds == 0 {
+		params.ExpiresInSeconds = defaultExpiration
+	} else if params.ExpiresInSeconds > defaultExpiration{
+		params.ExpiresInSeconds = defaultExpiration
+	}
+
+	token, err := auth.MakeJWT(user.ID, cfg.jwt_secret, time.Duration(params.ExpiresInSeconds) * time.Second)
+	if err != nil {
+		responseWithError(w, http.StatusInternalServerError, "Couldn't not create JWT")
+		return
+	}
+	
 	responseWithJson(w, http.StatusOK, returnUser{
-		ID: user.ID,
-		Email: user.Email,
+		User: User{
+			ID: user.ID,
+			Email: user.Email,
+		},
+		Token: token,
 	})
 }
