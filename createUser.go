@@ -20,7 +20,8 @@ func(cfg *apiConfig)handlerUsersCreate(w http.ResponseWriter, r *http.Request) {
 		Email string `json:"email"`
 	}
 	type returnUser struct {
-		User
+		ID int `json:"id"`
+		Email string `json:"email"`
 	}
 
 	decoder := json.NewDecoder(r.Body)
@@ -48,9 +49,7 @@ func(cfg *apiConfig)handlerUsersCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	
 	responseWithJson(w, http.StatusCreated, returnUser {
-		User: User{
-			ID: user.ID,
-			Email: user.Email,
-		},
+		Email: user.Email,
+		ID: user.ID,
 	})
 }

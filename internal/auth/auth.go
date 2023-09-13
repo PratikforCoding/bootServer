@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
-
+	"strconv"
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -25,16 +25,69 @@ func CheckPasswordHash(password, hash string) error {
 	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
 }
 
-func MakeJWT(id int, jwtSecret string, expiresIn time.Duration) (string, error){
+func MakeAccessToken(id int, jwtSecret string, expiresIn time.Duration) (string, error){
 	signingKey := []byte(jwtSecret)
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{
-		Issuer: "chirpy",
+		Issuer: "chirpy-access",
 		IssuedAt: jwt.NewNumericDate(time.Now().UTC()),
 		ExpiresAt: jwt.NewNumericDate(time.Now().UTC().Add(expiresIn)),
 		Subject: fmt.Sprintf("%d", id),
 	})
 	return token.SignedString(signingKey)
+}
+
+func MakeRefreshToken(id int, jwtSecret string, expiresIn time.Duration) (string, error){
+	signingKey := []byte(jwtSecret)
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{
+		Issuer: "chirpy-refresh",
+		IssuedAt: jwt.NewNumericDate(time.Now().UTC()),
+		ExpiresAt: jwt.NewNumericDate(time.Now().UTC().Add(expiresIn)),
+		Subject: fmt.Sprintf("%d", id),
+	})
+	return token.SignedString(signingKey)
+}
+
+func RefreshToken(tokenString, tokenSecret string) (string, error) {
+	claimsStruct := jwt.RegisteredClaims{}
+	token, err := jwt.ParseWithClaims(
+		tokenString,
+		&claimsStruct,
+		func(token *jwt.Token) (interface{}, error) { return []byte(tokenSecret), nil },
+	)
+	if err != nil {
+		return "", err
+	}
+
+	userIDString, err := token.Claims.GetSubject()
+	if err != nil {
+		return "", err
+	}
+
+	issuer, err := token.Claims.GetIssuer()
+	if err != nil {
+		return "", err
+	}
+	if issuer != "chirpy-refresh" {
+		return "", errors.New("invalid issuer")
+	}
+
+	userID, err := strconv.Atoi(userIDString)
+	if err != nil {
+		return "", err
+	}
+
+	newToken, err := MakeAccessToken(
+		userID,
+		tokenSecret,
+		time.Hour,
+	)
+	if err != nil {
+		return "", err
+	}
+
+	return newToken, nil
 }
 
 func ValidateJWT(tokenString, tokenSecret string) (string, error) {
@@ -47,6 +100,16 @@ func ValidateJWT(tokenString, tokenSecret string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+
+	issuer, err :=  token.Claims.GetIssuer()
+	if err != nil {
+		return "", err
+	}
+
+	if issuer != "chirpy-access" {
+		return "", errors.New("token is refresh token")
+	}
+
 	userIDString, err := token.Claims.GetSubject()
 	if err != nil {
 		return "", err
@@ -63,6 +126,6 @@ func GetBearerToken(headers http.Header) (string, error) {
 	if len(splitAuth) < 2 || splitAuth[0] != "Bearer" {
 		return "", errors.New("malformed authorization header")
 	}
-
+	
 	return splitAuth[1], nil
 }

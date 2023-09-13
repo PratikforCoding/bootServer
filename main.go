@@ -50,6 +50,8 @@ func main() {
 	apiRouter.Post("/users", apicfg.handlerUsersCreate)
 	apiRouter.Post("/login", apicfg.handlerLogin)
 	apiRouter.Put("/users", apicfg.handlerUsersUpdate)
+	apiRouter.Post("/revoke", apicfg.handlerRevoke)
+	apiRouter.Post("/refresh", apicfg.handlerRefresh)
 
 	router.Mount("/api", apiRouter)
 
